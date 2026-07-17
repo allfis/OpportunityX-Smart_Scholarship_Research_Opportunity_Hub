@@ -324,22 +324,57 @@ CREATE TABLE `deadline_alerts` (
 INSERT INTO `deadline_alerts` (`user_id`,`opportunity_id`,`alert_days_before`) VALUES
 (2,1,15),(2,3,7),(2,8,30),(3,6,14),(4,8,7),(5,2,7);
 
+-- একজন User কোন University-এর তা নির্দেশ করে।
+-- University delete হলে user থাকবে, শুধু university_id NULL হবে।
+
 ALTER TABLE `users` ADD CONSTRAINT `fk_user_uni` FOREIGN KEY (`university_id`) REFERENCES `universities` (`id`) ON DELETE SET NULL;
+
+-- একজন User কোন Country-এর তা নির্দেশ করে।
+-- Country delete হলে user থাকবে, country_id NULL হবে।
+
 ALTER TABLE `users` ADD CONSTRAINT `fk_user_cnt` FOREIGN KEY (`country_id`) REFERENCES `countries` (`id`) ON DELETE SET NULL;
+
+-- প্রতিটি Opportunity কোন Type (Scholarship, Internship ইত্যাদি) এর তা নির্দেশ করে।
 ALTER TABLE `opportunities` ADD CONSTRAINT `fk_opp_type` FOREIGN KEY (`type_id`) REFERENCES `opportunity_types` (`id`);
+
+-- প্রতিটি Opportunity কোন Field of Study এর তা নির্দেশ করে।
 ALTER TABLE `opportunities` ADD CONSTRAINT `fk_opp_field` FOREIGN KEY (`field_id`) REFERENCES `fields_of_study` (`id`);
+
+-- Opportunity কোন Country-এর তা নির্দেশ করে।
 ALTER TABLE `opportunities` ADD CONSTRAINT `fk_opp_cnt` FOREIGN KEY (`country_id`) REFERENCES `countries` (`id`);
+
+-- কোন User Opportunity পোস্ট করেছে তা নির্দেশ করে।
+-- User delete হলে Opportunity থাকবে, posted_by NULL হবে।
 ALTER TABLE `opportunities` ADD CONSTRAINT `fk_opp_post` FOREIGN KEY (`posted_by`) REFERENCES `users` (`id`) ON DELETE SET NULL;
+
+-- User delete হলে তার Bookmark-ও delete হবে।
 ALTER TABLE `bookmarks` ADD CONSTRAINT `fk_bm_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+-- Opportunity delete হলে Bookmark-ও delete হবে।
 ALTER TABLE `bookmarks` ADD CONSTRAINT `fk_bm_opp` FOREIGN KEY (`opportunity_id`) REFERENCES `opportunities` (`id`) ON DELETE CASCADE;
+
+-- User delete হলে তার Application-ও delete হবে, Opportunity delete হলে Application-ও delete হবে।
+
 ALTER TABLE `applications` ADD CONSTRAINT `fk_app_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 ALTER TABLE `applications` ADD CONSTRAINT `fk_app_opp` FOREIGN KEY (`opportunity_id`) REFERENCES `opportunities` (`id`) ON DELETE CASCADE;
 ALTER TABLE `applications` ADD CONSTRAINT `fk_app_stat` FOREIGN KEY (`status_id`) REFERENCES `application_statuses` (`id`);
+
+-- User delete হলে Notification-ও delete হবে, Opportunity delete হলে Notification থাকবে কিন্তু opportunity_id NULL হবে।
+
 ALTER TABLE `notifications` ADD CONSTRAINT `fk_ntf_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 ALTER TABLE `notifications` ADD CONSTRAINT `fk_ntf_opp` FOREIGN KEY (`opportunity_id`) REFERENCES `opportunities` (`id`) ON DELETE SET NULL;
+
+-- User delete হলে Alert-ও delete হবে, Opportunity delete হলে Alert-ও delete হবে।
 ALTER TABLE `deadline_alerts` ADD CONSTRAINT `fk_da_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 ALTER TABLE `deadline_alerts` ADD CONSTRAINT `fk_da_opp` FOREIGN KEY (`opportunity_id`) REFERENCES `opportunities` (`id`) ON DELETE CASCADE;
+
+-- User delete হলে Log থাকবে কিন্তু user_id NULL হবে।
 ALTER TABLE `activity_log` ADD CONSTRAINT `fk_log_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL;
+
+-- Opportunity title এবং description দ্রুত Search করার জন্য।
+-- Type, Field, Country, Active Status এবং Deadline অনুযায়ী দ্রুত Filter করার জন্য।
+-- User-এর Unread Notification দ্রুত বের করার জন্য।
+-- User-এর Applications এবং Status দ্রুত দেখানোর জন্য।
 
 CREATE INDEX idx_opp_search ON opportunities (title(100), description(100));
 CREATE INDEX idx_opp_filter ON opportunities (type_id, field_id, country_id, is_active, deadline);
