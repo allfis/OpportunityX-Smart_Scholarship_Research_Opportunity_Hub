@@ -2,71 +2,72 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    use Notifiable;
+    use HasFactory, Notifiable;
 
-    protected $table = 'users';
-    protected $hidden = ['password_hash', 'remember_token'];
     protected $fillable = [
-        'name', 'email', 'password_hash', 'role', 'university_id',
-        'department', 'education_level', 'cgpa', 'fields_of_interest',
-        'profile_photo', 'bio', 'research_experience_years',
-        'country_id', 'is_verified',
+        'name',
+        'email',
+        'password',
+        'role',
+        'is_active',
     ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
     protected $casts = [
-        'cgpa' => 'decimal:2',
-        'is_verified' => 'boolean',
-        'is_active' => 'boolean',
-        'research_experience_years' => 'integer',
         'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+        'is_active' => 'boolean',
     ];
 
-    public function getAuthPasswordName()
+    // One-to-one: A user can have one student profile
+    public function student(): HasOne
     {
-        return 'password_hash';
+        return $this->hasOne(Student::class);
     }
 
-    public function university()
+    // One-to-one: A user can have one faculty profile
+    public function faculty(): HasOne
     {
-        return $this->belongsTo(University::class);
+        return $this->hasOne(Faculty::class);
     }
 
-    public function country()
-    {
-        return $this->belongsTo(Country::class);
-    }
-
-    public function bookmarks()
-    {
-        return $this->hasMany(Bookmark::class);
-    }
-
-    public function applications()
-    {
-        return $this->hasMany(Application::class);
-    }
-
-    public function postedOpportunities()
+    // One-to-many: A faculty user posts many opportunities
+    public function postedOpportunities(): HasMany
     {
         return $this->hasMany(Opportunity::class, 'posted_by');
     }
 
-    public function notifications()
+    // One-to-many: A user can change many application statuses (as changed_by)
+    public function statusChanges(): HasMany
     {
-        return $this->hasMany(Notification::class);
+        return $this->hasMany(ApplicationStatusLog::class, 'changed_by');
     }
 
-    public function activityLog()
+    // Check role helper methods
+    public function isAdmin(): bool
     {
-        return $this->hasMany(ActivityLog::class);
+        return $this->role === 'admin';
+    }
+
+    public function isStudent(): bool
+    {
+        return $this->role === 'student';
     }
 
     public function isFaculty(): bool
     {
-        return in_array($this->role, ['faculty', 'admin']);
+        return $this->role === 'faculty';
     }
 }

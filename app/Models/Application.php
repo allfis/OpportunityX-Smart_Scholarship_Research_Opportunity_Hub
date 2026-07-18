@@ -2,35 +2,63 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Application extends Model
 {
-    protected $fillable = ['user_id', 'opportunity_id', 'status_id', 'applied_date', 'notes'];
-    protected $casts = ['applied_date' => 'date'];
+    use HasFactory;
 
-    public function user()
+    protected $fillable = [
+        'opportunity_id', 'student_id', 'status', 'cover_letter', 'applied_at',
+    ];
+
+    protected $casts = [
+        'applied_at' => 'datetime',
+    ];
+
+    protected static function booted(): void
     {
-        return $this->belongsTo(User::class);
+        // Auto-set applied_at when creating
+        static::creating(function (Application $application) {
+            $application->applied_at = $application->applied_at ?? now();
+        });
     }
 
-    public function opportunity()
+    public function opportunity(): BelongsTo
     {
         return $this->belongsTo(Opportunity::class);
     }
 
-    public function status()
+    public function student(): BelongsTo
     {
-        return $this->belongsTo(ApplicationStatus::class, 'status_id');
+        return $this->belongsTo(Student::class);
     }
 
-    protected static function booted()
+    // One-to-many: An application has many status logs
+    public function statusLogs(): HasMany
     {
-        static::created(function ($app) {
-            $app->opportunity?->increment('applications_count');
-        });
-        static::deleted(function ($app) {
-            $app->opportunity?->decrement('applications_count');
-        });
+        return $this->hasMany(ApplicationStatusLog::class);
+    }
+
+    // Helper: Status label with color
+    public function statusBadge(): string
+    {
+        return match($this->status) {
+            'applied' => 'badge-blue',
+            'under_review' => 'badge-yellow',
+            'shortlisted' => 'badge-purple',
+            'accepted' => 'badge-green',
+            'rejected' => 'badge-red',
+            'withdrawn' => 'badge-red',
+            default => 'badge-blue',
+        };
+    }
+
+    public function statusLabel(): string
+    {
+        return str_replace('_', ' ', ucfirst($this->status));
     }
 }

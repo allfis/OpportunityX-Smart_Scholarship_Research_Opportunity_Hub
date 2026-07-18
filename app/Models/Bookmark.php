@@ -2,18 +2,22 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Bookmark extends Model
 {
-    protected $fillable = ['user_id', 'opportunity_id'];
+    use HasFactory;
 
-    public function user()
+    protected $fillable = ['student_id', 'opportunity_id'];
+
+    public function student(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Student::class);
     }
 
-    public function opportunity()
+    public function opportunity(): BelongsTo
     {
         return $this->belongsTo(Opportunity::class);
     }

@@ -2,94 +2,195 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 class Opportunity extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
-        'type_id', 'title', 'description', 'organization', 'field_id',
-        'country_id', 'amount', 'deadline', 'eligibility_criteria',
-        'application_url', 'posted_by', 'is_featured', 'is_active',
-        'views_count', 'applications_count',
+        'title', 'slug', 'description', 'category_id', 'country_id',
+        'posted_by', 'type', 'status', 'deadline', 'funding_amount',
+        'funding_currency', 'funding_type', 'degree_level',
+        'eligibility_criteria', 'apply_url', 'is_featured', 'views_count',
     ];
+
     protected $casts = [
-        'deadline' => 'date',
+        'deadline' => 'datetime',
+        'funding_amount' => 'decimal:2',
         'is_featured' => 'boolean',
-        'is_active' => 'boolean',
         'views_count' => 'integer',
-        'applications_count' => 'integer',
+        'eligibility_criteria' => 'array',
     ];
 
-    public function type()
+    // Auto-generate slug when creating
+    protected static function booted(): void
     {
-        return $this->belongsTo(OpportunityType::class, 'type_id');
+        static::creating(function (Opportunity $opportunity) {
+            if (empty($opportunity->slug)) {
+                $opportunity->slug = Str::slug($opportunity->title) . '-' . Str::random(6);
+            }
+        });
     }
 
-    public function field()
+    // Belongs to category (subject area like CS, Engineering)
+    public function category(): BelongsTo
     {
-        return $this->belongsTo(FieldOfStudy::class, 'field_id');
+        return $this->belongsTo(Category::class);
     }
 
-    public function country()
+    // Belongs to country
+    public function country(): BelongsTo
     {
-        return $this->belongsTo(Country::class, 'country_id');
+        return $this->belongsTo(Country::class);
     }
 
-    public function postedBy()
+    // Belongs to the user (faculty) who posted it
+    public function postedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'posted_by');
     }
 
-    public function bookmarks()
+    // Polymorphic-style: one-to-one with type-specific detail table
+    public function scholarship(): HasOne
     {
-        return $this->hasMany(Bookmark::class);
+        return $this->hasOne(Scholarship::class);
     }
 
-    public function applications()
+    public function researchGrant(): HasOne
+    {
+        return $this->hasOne(ResearchGrant::class);
+    }
+
+    public function internship(): HasOne
+    {
+        return $this->hasOne(Internship::class);
+    }
+
+    public function fellowship(): HasOne
+    {
+        return $this->hasOne(Fellowship::class);
+    }
+
+    public function competition(): HasOne
+    {
+        return $this->hasOne(Competition::class);
+    }
+
+    // Get the type-specific detail dynamically
+    public function typeDetail(): HasOne
+    {
+        return match($this->type) {
+            'scholarship' => $this->scholarship(),
+            'research_grant' => $this->researchGrant(),
+            'internship' => $this->internship(),
+            'fellowship' => $this->fellowship(),
+            'competition' => $this->competition(),
+            default => $this->scholarship(),
+        };
+    }
+
+    // One-to-many: An opportunity has many applications
+    public function applications(): HasMany
     {
         return $this->hasMany(Application::class);
     }
 
-    public function notifications()
+    // Many-to-many: An opportunity is bookmarked by many students
+    public function bookmarkedBy(): BelongsToMany
     {
-        return $this->hasMany(Notification::class);
+        return $this->belongsToMany(Student::class, 'bookmarks')
+            ->withTimestamps();
     }
 
-    public function getDaysRemainingAttribute(): int
+    // Helper: Check if deadline is approaching (within 7 days)
+    public function isDeadlineApproaching(): bool
     {
-        return max(0, now()->diffInDays($this->deadline));
+        if (!$this->deadline) return false;
+        return $this->deadline->isFuture() && $this->deadline->diffInDays(now()) <= 7;
     }
 
-    public function getDeadlineStatusAttribute(): string
+    // Helper: Check if deadline has passed
+    public function isExpired(): bool
     {
-        $days = $this->days_remaining;
-        if ($days <= 7) return 'urgent';
-        if ($days <= 30) return 'soon';
-        return 'normal';
+        if (!$this->deadline) return false;
+        return $this->deadline->isPast();
     }
 
-    public function scopeActive(Builder $q): Builder
+    // Helper: Format funding amount
+    public function formattedFunding(): string
     {
-        return $q->where('is_active', 1)->where('deadline', '>', now());
+        if (!$this->funding_amount) {
+            return $this->funding_type === 'none' ? 'Unfunded' : 'Not specified';
+        }
+        return $this->funding_currency . ' ' . number_format($this->funding_amount, 0);
     }
 
-    public function scopeFeatured(Builder $q): Builder
+    // Helper: Get type label for display
+    public function typeLabel(): string
     {
-        return $q->where('is_featured', 1);
+        return match($this->type) {
+            'scholarship' => 'Scholarship',
+            'research_grant' => 'Research Grant',
+            'internship' => 'Internship',
+            'fellowship' => 'Fellowship',
+            'competition' => 'Competition',
+            default => 'Opportunity',
+        };
     }
 
-    public function scopeOfType(Builder $q, string $slug): Builder
+    // Helper: Get type color for badges
+    public function typeColor(): string
     {
-        return $q->whereHas('type', fn($q) => $q->where('slug', $slug));
+        return match($this->type) {
+            'scholarship' => 'blue',
+            'research_grant' => 'green',
+            'internship' => 'purple',
+            'fellowship' => 'yellow',
+            'competition' => 'red',
+            default => 'blue',
+        };
     }
 
-    public function scopeSearch(Builder $q, string $term): Builder
+    // Scope: Only active opportunities
+    public function scopeActive($query)
     {
-        return $q->where(function ($q) use ($term) {
-            $q->where('title', 'like', "%{$term}%")
-              ->orWhere('organization', 'like', "%{$term}%")
-              ->orWhere('description', 'like', "%{$term}%");
+        return $query->where('status', 'active');
+    }
+
+    // Scope: By type
+    public function scopeOfType($query, string $type)
+    {
+        return $query->where('type', $type);
+    }
+
+    // Scope: Featured
+    public function scopeFeatured($query)
+    {
+        return $query->where('is_featured', true);
+    }
+
+    // Scope: Not expired
+    public function scopeNotExpired($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('deadline')
+              ->orWhere('deadline', '>', now());
+        });
+    }
+
+    // Scope: Search by title or description
+    public function scopeSearch($query, string $term)
+    {
+        return $query->where(function ($q) use ($term) {
+            $q->where('title', 'LIKE', "%{$term}%")
+              ->orWhere('description', 'LIKE', "%{$term}%");
         });
     }
 }
